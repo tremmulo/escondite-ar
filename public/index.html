@@ -1,0 +1,100 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Escondite AR</title><style>
+*{box-sizing:border-box}body{margin:0;background:#111;color:#fff;font:16px system-ui,sans-serif;overflow:hidden;touch-action:manipulation;user-select:none}
+#v,#c{position:fixed;inset:0;width:100%;height:100%}#v{object-fit:cover}
+#ui{position:fixed;inset:0;pointer-events:none}.b{pointer-events:auto}
+.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(88vw,360px);background:#000b;backdrop-filter:blur(8px);padding:20px;border-radius:20px;text-align:center}
+.top{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:110px;background:#000a;padding:10px 12px;border-radius:14px;font-size:14px}
+.bot{position:absolute;left:0;right:0;bottom:max(12px,env(safe-area-inset-bottom));padding:0 12px;display:flex;flex-direction:column;gap:8px;align-items:center}
+button,input{font:inherit;border:0;border-radius:14px;padding:12px 16px;margin:4px 0;width:100%}
+button{background:#7c4dff;color:#fff;font-weight:700}button.g{background:#fff3;width:auto}button:disabled{opacity:.3}
+input{background:#fff;color:#111}.row{display:flex;gap:8px;width:100%;justify-content:center}.row button{width:auto;flex:1}
+.inv{display:flex;gap:8px;background:#000a;padding:8px;border-radius:18px}.inv button{width:52px;height:52px;font-size:28px;padding:0;margin:0;background:#fff2}.inv .on{background:#7c4dff}
+.foot{position:absolute;left:14px;bottom:42%;width:64px;height:64px;font-size:28px;padding:0;border-radius:50%}
+h1,h2{margin:.2em 0}.s{font-size:13px;opacity:.7}#toast{position:absolute;top:40%;width:100%;text-align:center;font-size:42px;text-shadow:0 2px 8px #000}
+</style></head><body><video id=v playsinline muted autoplay></video><canvas id=c></canvas><div id=ui></div><div id=toastw></div>
+<script>
+const $=id=>document.getElementById(id),TAU=Math.PI*2,D=Math.PI/180,TIME=300;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const S={stage:'home',id:Math.random().toString(36).slice(2,8),name:'',inv:['🎁','🔑','💎','🧸','🍕'],items:[],sel:null,dist:1.5,pos:[0,0,1.4],trail:[],corners:[],opened:[],done:false,zero:false,off:0,code:''};
+let R=null,pend={},ori={a:0,b:90,g:0},C=$('c'),X=C.getContext('2d'),W,H,walk=false,lastT=0,gm=9.8,lastStep=0,lastVib=0;
+function size(){const r=devicePixelRatio||1;W=innerWidth;H=innerHeight;C.width=W*r;C.height=H*r;X.setTransform(r,0,0,r,0,0)}
+addEventListener('resize',size);size();
+// ---- Sensores: orientación (giroscopio+brújula) y pasos (acelerómetro)
+addEventListener('ondeviceorientationabsolute' in window?'deviceorientationabsolute':'deviceorientation',e=>{if(e.alpha==null)return;const h=e.webkitCompassHeading;ori.a=h!=null?360-h:e.alpha;ori.b=e.beta;ori.g=e.gamma},true);
+addEventListener('devicemotion',e=>{const a=e.accelerationIncludingGravity;if(!a)return;const m=Math.hypot(a.x,a.y,a.z),t=Date.now();gm=gm*.95+m*.05;
+ if(m-gm>2&&t-lastStep>400&&['map','hide','seek'].includes(S.stage)&&(S.stage!=='map'||S.zero)){lastStep=t;mv(.7)}});
+function bas(){const a=ori.a*D,b=ori.b*D,g=ori.g*D,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cg=Math.cos(g),sg=Math.sin(g);
+ return{r:[ca*cg-sa*sb*sg,sa*cg+ca*sb*sg,-cb*sg],u:[-sa*cb,ca*cb,sb],f:[-(ca*sg+sa*sb*cg),-(sa*sg-ca*sb*cg),-cb*cg]}}
+function mv(d){const B=bas();let x=B.f[0],y=B.f[1],n=Math.hypot(x,y);if(n<.35){x=B.u[0];y=B.u[1];n=Math.hypot(x,y)||1}
+ S.pos[0]+=x/n*d;S.pos[1]+=y/n*d;S.trail.push([S.pos[0],S.pos[1]]);if(S.trail.length>800)S.trail.shift()}
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+function proj(p,B){const v=[p[0]-S.pos[0],p[1]-S.pos[1],p[2]-S.pos[2]],z=dot(v,B.f);if(z<.15)return null;const f=H*.85;
+ return{x:W/2+f*dot(v,B.r)/z,y:H/2-f*dot(v,B.u)/z,d:Math.hypot(...v)}}
+// ---- Red (sala por WiFi)
+async function sync(extra={}){const me={name:S.name,...pend};pend={};
+ try{const r=await fetch('/api/room',{method:'POST',body:JSON.stringify({id:S.id,code:S.code,me,...extra})});R=await r.json();S.off=R.now-Date.now();flow()}catch(e){Object.assign(pend,me)}}
+function targets(){if(!R)return[];let o=Object.entries(R.players).filter(([i])=>i!==S.id);if(!o.length)o=Object.entries(R.players);
+ return o.flatMap(([i,p])=>(p.hidden||[]).map((h,k)=>({k:i+':'+k,e:h[0],p:[h[1],h[2],h[3]]})))}
+function resetAll(){Object.assign(S,{items:[],sel:null,opened:[],done:false,zero:false,corners:[],trail:[]})}
+function flow(){const st=S.stage;
+ if(R.phase==='play'&&st==='lobby'){resetAll();S.stage='map';render()}
+ else if(R.phase==='lobby'&&!['home','lobby'].includes(st)){resetAll();S.stage='lobby';render()}
+ if(S.stage==='wait'&&R.t0){S.stage='seek';render()}
+ if(S.stage==='seek'){const T=targets();if(T.length&&T.every(t=>S.opened.includes(t.k))&&!S.done){S.done=true;pend.done=(Date.now()+S.off-R.t0)/1000;sync()}
+  if(R.winner)endGame()}
+ if(S.stage==='lobby'&&$('pl'))$('pl').innerHTML=Object.values(R.players).map(p=>'<div>📱 '+esc(p.name)+'</div>').join('')}
+function endGame(){S.stage='end';render()}
+// ---- Acciones
+async function go(){S.name=($('nm').value||'Jugador').slice(0,14);S.code=$('cd').value.trim().toLowerCase();
+ try{if(DeviceOrientationEvent.requestPermission){await DeviceOrientationEvent.requestPermission();await DeviceMotionEvent.requestPermission()}}catch(e){}
+ try{$('v').srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})}catch(e){alert('Necesito acceso a la cámara (HTTPS).');return}
+ S.stage='lobby';render();sync();setInterval(sync,1000);requestAnimationFrame(loop)}
+const start=()=>sync({start:1});
+function zero(){S.pos=[0,0,1.4];S.trail=[[0,0]];S.zero=true;render()}
+function corner(){S.corners.push([S.pos[0],S.pos[1]]);toast('🧱')}
+function pick(i){S.sel=i;render()}
+function place(){const B=bas();if(S.sel===null)return;S.items.push([S.inv[S.sel],...S.pos.map((v,i)=>v+B.f[i]*S.dist)]);S.sel=null;navigator.vibrate&&navigator.vibrate(40);toast('📍');render()}
+function undo(){S.items.pop();render()}
+function ready(){S.stage='wait';pend.hidden=S.items;pend.stage='ready';sync();render()}
+function openNear(){const T=targets().filter(t=>!S.opened.includes(t.k)).map(t=>({t,d:Math.hypot(t.p[0]-S.pos[0],t.p[1]-S.pos[1],t.p[2]-S.pos[2])})).sort((a,b)=>a.d-b.d)[0];
+ if(!T||T.d>1.8)return;S.opened.push(T.t.k);pend.found=S.opened.slice();navigator.vibrate&&navigator.vibrate([80,40,80]);toast('¡'+T.t.e+'!');sync()}
+function toast(t){const d=document.createElement('div');d.id='toast';d.textContent=t;$('toastw').appendChild(d);setTimeout(()=>d.remove(),1200)}
+const foot='<button class="g b foot" onpointerdown="walk=true" onpointerup="walk=false" onpointerleave="walk=false">🦶</button>';
+function render(){const s=S.stage;let h='';
+ if(s==='home')h=`<div class="card b"><h1>🫥 Escondite AR</h1><p class=s>Esconde objetos por tu casa y encuéntralos con la cámara.</p><input id=nm placeholder="Tu nombre"><input id=cd placeholder="Código de sala (opcional)"><button onclick=go()>Entrar</button></div>`;
+ if(s==='lobby')h=`<div class="card b"><h2>Sala</h2><div id=pl></div><p class=s>Los móviles de tu misma WiFi aparecen aquí solos. Si juegas solo, esconderás y luego buscarás tú.</p><button onclick=start()>🚀 Empezar</button></div>`;
+ if(s==='map'&&!S.zero)h=`<div class="card b"><h2>Punto cero</h2><p>Todos juntos en el mismo punto de salida, con el móvil apuntando en la misma dirección. Pulsad a la vez.</p><button onclick=zero()>📍 Fijar punto cero</button></div>`;
+ if(s==='map'&&S.zero)h=`<div class=top>🗺️ Recorre la zona. El mapa se dibuja mientras andas (minimapa). Marca las esquinas.</div>${foot}<div class="bot b"><div class=row><button class=g onclick=corner()>🧱 Esquina</button><button onclick="S.stage='hide';render()">✅ Mapa listo</button></div></div>`;
+ if(s==='hide'){const n=S.items.length;h=`<div class=top>🙈 Apunta con la mira al sitio (armario, bajo el sofá…), elige un objeto y escóndelo. ${n}/5</div>${foot}<div class="bot b"><div class=inv>${S.inv.map((e,i)=>`<button class="${S.sel===i?'on':''}" ${i<n?'disabled':''} onclick=pick(${i})>${e}</button>`).join('')}</div>
+  <div class=s>Distancia: <b id=dl>${S.dist.toFixed(1)}</b> m</div><input type=range min=.3 max=4 step=.1 value=${S.dist} oninput="S.dist=+this.value;$('dl').textContent=S.dist.toFixed(1)">
+  <div class=row><button class=g onclick=undo()>↩</button><button ${S.sel===null?'disabled':''} onclick=place()>📍 Esconder aquí</button></div>${n>=5?'<button onclick=ready()>✅ Listo, a buscar</button>':''}</div>`}
+ if(s==='wait')h=`<div class="card b"><h2>⏳ Esperando…</h2><p>Los demás todavía están escondiendo.</p></div>`;
+ if(s==='seek')h=`<div class=top>⏱ <b id=tm></b> · 🎯 <b id=fc></b><div id=hint></div></div>${foot}<div class="bot b"><button id=ob style="display:none" onclick=openNear()>📦 Abrir caja</button></div>`;
+ if(s==='end'){const L=Object.values(R.players).sort((a,b)=>(b.found||[]).length-(a.found||[]).length),w=R.players[R.winner]||L[0];
+  h=`<div class="card b"><h1>🏆 ${esc(w.name)}</h1><p>${R.winner?'¡Terminó primero!':'Se acabó el tiempo'}</p>${L.map(p=>`<div>${esc(p.name)}: ${(p.found||[]).length} 🎁</div>`).join('')}<button onclick="sync({reset:1})">Jugar otra vez</button></div>`}
+ $('ui').innerHTML=h}
+// ---- Dibujo AR
+function emo(e,x,y,d,a,ring){const s=Math.max(26,Math.min(150,110/d));X.globalAlpha=a;X.font=s+'px serif';X.textAlign='center';X.textBaseline='middle';
+ if(ring){X.strokeStyle='#fff';X.setLineDash([6,6]);X.lineWidth=2;X.beginPath();X.arc(x,y,s*.7,0,TAU);X.stroke();X.setLineDash([])}X.fillText(e,x,y);X.globalAlpha=1}
+function mini(){const r=42,cx=W-r-12,cy=r+max0(),k=8;X.save();X.fillStyle='#000a';X.beginPath();X.arc(cx,cy,r,0,TAU);X.fill();X.clip();
+ X.strokeStyle='#4ff';X.lineWidth=2;X.beginPath();S.trail.forEach(([x,y],i)=>{const px=cx+(x-S.pos[0])*k,py=cy-(y-S.pos[1])*k;i?X.lineTo(px,py):X.moveTo(px,py)});X.stroke();
+ X.fillStyle='#fa0';S.corners.forEach(([x,y])=>X.fillRect(cx+(x-S.pos[0])*k-3,cy-(y-S.pos[1])*k-3,6,6));
+ const B=bas(),n=Math.hypot(B.f[0],B.f[1])||1;X.fillStyle='#fff';X.beginPath();X.arc(cx,cy,4,0,TAU);X.fill();X.strokeStyle='#fff';X.beginPath();X.moveTo(cx,cy);X.lineTo(cx+B.f[0]/n*16,cy-B.f[1]/n*16);X.stroke();X.restore()}
+const max0=()=>Math.max(12,0)+4;
+function loop(t){requestAnimationFrame(loop);X.clearRect(0,0,W,H);const B=bas(),st=S.stage;if(walk)mv(1.1*(t-lastT)/1000);lastT=t;
+ if(['map','hide','seek'].includes(st)&&(st!=='map'||S.zero))mini();
+ if(st==='hide'){S.items.forEach(h=>{const q=proj([h[1],h[2],h[3]],B);if(q)emo(h[0],q.x,q.y,q.d,.55,true)});
+  if(S.sel!==null){const q=proj(S.pos.map((v,i)=>v+B.f[i]*S.dist),B);if(q)emo(S.inv[S.sel],q.x,q.y,q.d,.95,true)}
+  X.strokeStyle='#fff9';X.lineWidth=2;X.beginPath();X.arc(W/2,H/2,8,0,TAU);X.stroke()}
+ if(st==='seek'&&R){let best=1e9;
+  targets().forEach(o=>{if(S.opened.includes(o.k))return;const d=Math.hypot(o.p[0]-S.pos[0],o.p[1]-S.pos[1],o.p[2]-S.pos[2]);best=Math.min(best,d);const q=proj(o.p,B);if(!q||d>2.6)return;
+   if(d>1.8)emo('✨',q.x,q.y,q.d*1.5,.25+.6*(2.6-d)/.8+.1*Math.sin(t/200));else{emo('📦',q.x,q.y+4*Math.sin(t/150),q.d,1);X.font='bold 14px sans-serif';X.fillStyle='#fff';X.fillText('¡Aquí cerca!',q.x,q.y+60)}});
+  const left=TIME-(Date.now()+S.off-R.t0)/1000;if(left<=0)return endGame();
+  const T=targets();$('tm').textContent=Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0');$('fc').textContent=S.opened.length+'/'+T.length;
+  $('hint').textContent=best>6?'🥶 Frío':best>3.5?'😐 Templado':best>1.8?'🔥 ¡Caliente!':best<1e8?'🌋 ¡Casi!':'';
+  $('ob').style.display=best<=1.8?'block':'none';if(best<2.6&&t-lastVib>(best<1.8?500:1100)){lastVib=t;navigator.vibrate&&navigator.vibrate(30)}}
+ X.globalAlpha=1}
+render();
+</script></body></html>
