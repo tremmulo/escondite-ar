@@ -1,100 +1,136 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Escondite AR</title><style>
-*{box-sizing:border-box}body{margin:0;background:#111;color:#fff;font:16px system-ui,sans-serif;overflow:hidden;touch-action:manipulation;user-select:none}
-#v,#c{position:fixed;inset:0;width:100%;height:100%}#v{object-fit:cover}
-#ui{position:fixed;inset:0;pointer-events:none}.b{pointer-events:auto}
-.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(88vw,360px);background:#000b;backdrop-filter:blur(8px);padding:20px;border-radius:20px;text-align:center}
-.top{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:110px;background:#000a;padding:10px 12px;border-radius:14px;font-size:14px}
-.bot{position:absolute;left:0;right:0;bottom:max(12px,env(safe-area-inset-bottom));padding:0 12px;display:flex;flex-direction:column;gap:8px;align-items:center}
-button,input{font:inherit;border:0;border-radius:14px;padding:12px 16px;margin:4px 0;width:100%}
-button{background:#7c4dff;color:#fff;font-weight:700}button.g{background:#fff3;width:auto}button:disabled{opacity:.3}
-input{background:#fff;color:#111}.row{display:flex;gap:8px;width:100%;justify-content:center}.row button{width:auto;flex:1}
-.inv{display:flex;gap:8px;background:#000a;padding:8px;border-radius:18px}.inv button{width:52px;height:52px;font-size:28px;padding:0;margin:0;background:#fff2}.inv .on{background:#7c4dff}
-.foot{position:absolute;left:14px;bottom:42%;width:64px;height:64px;font-size:28px;padding:0;border-radius:50%}
-h1,h2{margin:.2em 0}.s{font-size:13px;opacity:.7}#toast{position:absolute;top:40%;width:100%;text-align:center;font-size:42px;text-shadow:0 2px 8px #000}
-</style></head><body><video id=v playsinline muted autoplay></video><canvas id=c></canvas><div id=ui></div><div id=toastw></div>
+<title>Arcade AR</title><style>
+:root{--a:#8b5cf6;--b:#06b6d4;--glass:rgba(12,14,28,.64)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#0b0d1a;color:#fff;font:15px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;touch-action:manipulation;user-select:none}
+#v,#c{position:fixed;inset:0;width:100%;height:100%}#v{object-fit:cover;background:radial-gradient(circle at 30% 20%,#2a1b5e,#0b0d1a 70%)}
+#ui,#tw{position:fixed;inset:0;pointer-events:none}#ui button,#ui input{pointer-events:auto}
+.glass{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid #ffffff1f;border-radius:22px;pointer-events:auto}
+.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(90vw,380px);padding:22px;text-align:center;animation:in .35s ease}
+@keyframes in{from{opacity:0;margin-top:14px}to{opacity:1;margin-top:0}}
+h1{font-size:32px;margin:4px 0;letter-spacing:-.5px}h2{margin:0 0 6px}.sub{opacity:.7;font-size:13px;margin:4px 0}
+button,input{font:inherit;border:0;border-radius:14px;padding:13px 16px;width:100%;margin-top:10px;color:#fff}
+.btn{background:linear-gradient(135deg,var(--a),var(--b));font-weight:700;box-shadow:0 6px 20px #7c3aed55;transition:transform .12s}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;box-shadow:none}
+.ghost{background:#ffffff22;font-weight:600}input{background:#fffffff0;color:#111;text-align:center}
+.game{display:flex;gap:14px;align-items:center;text-align:left;padding:14px;background:#ffffff14;border:1px solid #ffffff1f;margin-top:12px}
+.game i{font-size:40px;font-style:normal}.game b{display:block;font-size:17px}.game span{font-size:12.5px;opacity:.7}
+.hud{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{padding:9px 14px;border-radius:99px;font-weight:700;font-size:14px}.hud button{width:auto;margin:0;padding:9px 14px;border-radius:99px}
+.bar{position:absolute;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));padding:12px}
+.inv{display:flex;gap:8px;justify-content:center;margin:6px 0}.inv button{width:54px;height:54px;font-size:28px;padding:0;margin:0;background:#ffffff1c}.inv .on{background:linear-gradient(135deg,var(--a),var(--b));transform:translateY(-4px)}.inv button:disabled{opacity:.25}
+.row2{display:flex;gap:8px}.row2 button{margin-top:4px}
+.toast{position:absolute;left:0;right:0;top:34%;text-align:center;font-size:42px;font-weight:800;text-shadow:0 4px 18px #000;animation:pop 1.4s ease forwards}
+@keyframes pop{0%{transform:scale(.4);opacity:0}20%{transform:scale(1.15);opacity:1}80%{opacity:1}100%{transform:translateY(-30px);opacity:0}}
+.sp{width:34px;height:34px;border:4px solid #fff3;border-top-color:#fff;border-radius:50%;margin:12px auto;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
+</style></head><body><video id=v playsinline muted autoplay></video><canvas id=c></canvas><div id=ui></div><div id=tw></div>
 <script>
-const $=id=>document.getElementById(id),TAU=Math.PI*2,D=Math.PI/180,TIME=300;
+const $=id=>document.getElementById(id),TAU=Math.PI*2,TIME=300,EM=['🎁','🔑','💎','🧸','🍕'];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const S={stage:'home',id:Math.random().toString(36).slice(2,8),name:'',inv:['🎁','🔑','💎','🧸','🍕'],items:[],sel:null,dist:1.5,pos:[0,0,1.4],trail:[],corners:[],opened:[],done:false,zero:false,wk:false,off:0,code:''};
-let R=null,pend={},ori={a:0,b:90,g:0},C=$('c'),X=C.getContext('2d'),W,H,walk=false,lastT=0,gm=9.8,lastStep=0,lastVib=0;
-function size(){const r=devicePixelRatio||1;W=innerWidth;H=innerHeight;C.width=W*r;C.height=H*r;X.setTransform(r,0,0,r,0,0)}
-addEventListener('resize',size);size();
-// ---- Sensores: orientación (giroscopio+brújula) y pasos (acelerómetro)
-addEventListener('ondeviceorientationabsolute' in window?'deviceorientationabsolute':'deviceorientation',e=>{if(e.alpha==null)return;const h=e.webkitCompassHeading;ori.a=h!=null?360-h:e.alpha;ori.b=e.beta;ori.g=e.gamma},true);
-addEventListener('devicemotion',e=>{const a=e.accelerationIncludingGravity;if(!a)return;const m=Math.hypot(a.x,a.y,a.z),t=Date.now();gm=gm*.95+m*.05;
- if(m-gm>2&&t-lastStep>400&&S.wk&&['hide','seek'].includes(S.stage)){lastStep=t;mv(.7)}});
-function bas(){const a=ori.a*D,b=ori.b*D,g=ori.g*D,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cg=Math.cos(g),sg=Math.sin(g);
- return{r:[ca*cg-sa*sb*sg,sa*cg+ca*sb*sg,-cb*sg],u:[-sa*cb,ca*cb,sb],f:[-(ca*sg+sa*sb*cg),-(sa*sg-ca*sb*cg),-cb*cg]}}
-function mv(d){const B=bas();let x=B.f[0],y=B.f[1],n=Math.hypot(x,y);if(n<.35){x=B.u[0];y=B.u[1];n=Math.hypot(x,y)||1}
- S.pos[0]+=x/n*d;S.pos[1]+=y/n*d;S.trail.push([S.pos[0],S.pos[1]]);if(S.trail.length>800)S.trail.shift()}
-const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
-function proj(p,B){const v=[p[0]-S.pos[0],p[1]-S.pos[1],p[2]-S.pos[2]],z=dot(v,B.f);if(z<.15)return null;const f=H*.85;
- return{x:W/2+f*dot(v,B.r)/z,y:H/2-f*dot(v,B.u)/z,d:Math.hypot(...v)}}
-// ---- Red (sala por WiFi)
+const S={scr:'home',game:'',id:Math.random().toString(36).slice(2,8),name:'',code:'',items:[],sel:0,opened:[],done:false,off:0,poll:0,cur:null,sd:0,started:false};
+let R=null,pend={},W,H,M={sc:0,n:0,o:null,p:null},prev=null,lastVis=0,lastVib=0,lastT=0,B={},TP={};
+const C=$('c'),X=C.getContext('2d');
+function size(){const r=devicePixelRatio||1;W=innerWidth;H=innerHeight;C.width=W*r;C.height=H*r;X.setTransform(r,0,0,r,0,0)}addEventListener('resize',size);size();
+// ---------- Visión: huella visual del sitio (16x16 en gris) ----------
+const FC=document.createElement('canvas'),FX=FC.getContext('2d',{willReadFrequently:true}),FW=96;
+function grab(){const v=$('v');if(!v.videoWidth)return null;const w=FW,h=Math.round(FW*v.videoHeight/v.videoWidth);FC.width=w;FC.height=h;FX.drawImage(v,0,0,w,h);
+ const d=FX.getImageData(0,0,w,h).data,g=new Float32Array(w*h);for(let i=0;i<w*h;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;return{g,w,h}}
+function raw(f,cx,cy,s){const L=s*f.w,o=new Uint8Array(256);for(let j=0;j<16;j++)for(let i=0;i<16;i++){const x=Math.min(f.w-1,Math.max(0,Math.round(cx*f.w+(i/15-.5)*L))),y=Math.min(f.h-1,Math.max(0,Math.round(cy*f.h+(j/15-.5)*L)));o[j*16+i]=f.g[y*f.w+x]}return o}
+function nrm(a){const p=new Float32Array(256);let m=0;for(let k=0;k<256;k++)m+=a[k];m/=256;let n=0;for(let k=0;k<256;k++){p[k]=a[k]-m;n+=p[k]*p[k]}const sd=Math.sqrt(n/256);if(n){n=Math.sqrt(n);for(let k=0;k<256;k++)p[k]/=n}return{p,sd}}
+const b64=a=>btoa(String.fromCharCode(...a)),unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+function vm(){const v=$('v'),vw=v.videoWidth||1,vh=v.videoHeight||1,sc=Math.max(W/vw,H/vh);return{sc,vw,vh,ox:(vw*sc-W)/2,oy:(vh*sc-H)/2}}
+const f2s=(fx,fy)=>{const m=vm();return[fx*m.vw*m.sc-m.ox,fy*m.vh*m.sc-m.oy]},s2f=(x,y)=>{const m=vm();return[(x+m.ox)/(m.vw*m.sc),(y+m.oy)/(m.vh*m.sc)]};
+const WIN=[];for(const s of[.26,.36,.5])for(const y of[.32,.5,.68])for(const x of[.3,.5,.7])WIN.push([x,y,s]);
+function vision(){const f=grab();if(!f)return;
+ if(S.scr==='hide'){const[cx,cy]=s2f(W/2,H/2);S.cur=raw(f,cx,cy,.36);S.sd=nrm(S.cur).sd;const ok=S.sd>12;
+  if($('q'))$('q').textContent=ok?'✅ Buen sitio: tiene detalle':'⚠️ Muy liso: busca algo con textura o detalles';if($('hb'))$('hb').disabled=!ok||S.sel<0}
+ else if(S.scr==='seek')seekV(f);else if(S.scr==='soc')socV(f)}
+function seekV(f){let best=0,bp=null,bo=null;
+ for(const o of targets()){if(S.opened.includes(o.k))continue;const tp=TP[o.k]||(TP[o.k]=nrm(unb64(o.t)));
+  for(const[x,y,s]of WIN){const q=nrm(raw(f,x,y,s));if(q.sd<9)continue;let c=0;for(let k=0;k<256;k++)c+=q.p[k]*tp.p[k];if(c>best){best=c;bp=[x,y];bo=o}}}
+ M.sc=M.sc*.5+best*.5;M.n=best>.7?M.n+1:Math.max(0,M.n-1);M.o=bo;M.p=bp;
+ if($('hint'))$('hint').textContent=M.sc>.6?'🌋 ¡Casi!':M.sc>.45?'🔥 Caliente':M.sc>.3?'😐 Templado':'🥶 Frío';
+ if($('ob'))$('ob').style.display=M.n>=3?'block':'none';
+ if(M.sc>.4&&Date.now()-lastVib>700){lastVib=Date.now();navigator.vibrate&&navigator.vibrate(25)}}
+// ---------- Red ----------
 async function sync(extra={}){const me={name:S.name,...pend};pend={};
  try{const r=await fetch('/api/room',{method:'POST',body:JSON.stringify({id:S.id,code:S.code,me,...extra})});R=await r.json();S.off=R.now-Date.now();flow()}catch(e){Object.assign(pend,me)}}
 function targets(){if(!R)return[];let o=Object.entries(R.players).filter(([i])=>i!==S.id);if(!o.length)o=Object.entries(R.players);
- return o.flatMap(([i,p])=>(p.hidden||[]).map((h,k)=>({k:i+':'+k,e:h[0],p:[h[1],h[2],h[3]]})))}
-function resetAll(){Object.assign(S,{pos:[0,0,1.4],items:[],sel:null,opened:[],done:false,zero:false,corners:[],trail:[]})}
-function flow(){const st=S.stage;
- if(R.phase==='play'&&st==='lobby'){resetAll();S.stage='hide';render()}
- else if(R.phase==='lobby'&&!['home','lobby'].includes(st)){resetAll();S.stage='lobby';render()}
- if(S.stage==='wait'&&R.t0){S.stage='seek';render()}
- if(S.stage==='seek'){const T=targets();if(T.length&&T.every(t=>S.opened.includes(t.k))&&!S.done){S.done=true;pend.done=(Date.now()+S.off-R.t0)/1000;sync()}
-  if(R.winner)endGame()}
- if(S.stage==='lobby'&&$('pl'))$('pl').innerHTML=Object.values(R.players).map(p=>'<div>📱 '+esc(p.name)+'</div>').join('')}
-function endGame(){S.stage='end';render()}
-// ---- Acciones
-async function go(){S.name=($('nm').value||'Jugador').slice(0,14);S.code=$('cd').value.trim().toLowerCase();
- try{if(DeviceOrientationEvent.requestPermission){await DeviceOrientationEvent.requestPermission();await DeviceMotionEvent.requestPermission()}}catch(e){}
- try{$('v').srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})}catch(e){alert('Necesito acceso a la cámara (HTTPS).');return}
- S.stage='lobby';render();sync();setInterval(sync,1000);requestAnimationFrame(loop)}
+ return o.flatMap(([i,p])=>(p.hidden||[]).map((h,k)=>({k:i+':'+k,e:h.e,t:h.t})))}
+function flow(){if(S.game!=='hide')return;const st=S.scr;
+ if(R.phase==='play'&&st==='lobby'){S.items=[];S.opened=[];S.done=false;S.sel=0;TP={};go2('hide')}
+ else if(R.phase==='lobby'&&['hide','wait','seek','end'].includes(st))go2('lobby');
+ else if(st==='wait'&&R.t0)go2('seek');
+ else if(st==='seek'){const T=targets();if(T.length&&T.every(t=>S.opened.includes(t.k))&&!S.done){S.done=true;pend.done=(Date.now()+S.off-R.t0)/1000;sync()}if(R.winner)go2('end')}
+ if(S.scr==='lobby'&&$('pl'))$('pl').innerHTML=Object.values(R.players).map(p=>'<div class="pill glass" style="margin:6px 0">📱 '+esc(p.name)+'</div>').join('')}
+// ---------- Pantallas ----------
+function go2(s){S.scr=s;$('ui').innerHTML=SC[s]();if(s==='seek'){M={sc:0,n:0}}}
+const back='<button class="glass ghost" onclick=menu()>‹ Menú</button>';
+const SC={
+home:()=>`<div class="center glass"><div style="font-size:56px">🫥</div><h1>Arcade AR</h1><p class=sub>Juegos de realidad aumentada en tu navegador</p><input id=nm placeholder="Tu nombre" maxlength=14><input id=cd placeholder="Código de sala (opcional)"><button class=btn onclick=enter()>Entrar y activar cámara</button></div>`,
+menu:()=>`<div class="center glass"><h2>Hola, ${esc(S.name)} 👋</h2><p class=sub>¿A qué quieres jugar?</p><button class=game onclick=playHide()><i>🫥</i><div><b>Escondite</b><span>Esconde objetos en tu casa y que los encuentren con la cámara. Multijugador por WiFi.</span></div></button><button class=game onclick=playSoc()><i>⚽</i><div><b>Penaltis</b><span>Pégale a la pelota virtual con tu pie y marca al portero.</span></div></button></div>`,
+lobby:()=>`<div class="hud">${back}</div><div class="center glass"><h2>Sala</h2><div id=pl></div><p class=sub>Los móviles de tu WiFi entran aquí solos. Si juegas solo, esconderás y luego buscarás tú.</p><button class=btn onclick=start()>🚀 Empezar partida</button></div>`,
+hide:()=>{const u=S.items.map(i=>i.e),n=u.length;return`<div class=hud>${back}<div class="pill glass">📍 ${n} escondidos</div></div><div class="bar glass"><div id=q class=sub style="text-align:center"></div><div class=inv>${EM.map((e,i)=>`<button class="${S.sel===i?'on':''}" ${u.includes(e)?'disabled':''} onclick=pick(${i})>${e}</button>`).join('')}</div><p class=sub style="text-align:center">Centra el recuadro en el sitio y pulsa esconder</p><div class=row2><button id=hb class="btn" disabled onclick=place()>📍 Esconder aquí</button><button class="btn ghost" ${n?'':'disabled'} onclick=ready()>✅ Listo</button></div></div>`},
+wait:()=>`<div class="center glass"><div class=sp></div><h2>Esperando…</h2><p class=sub>Los demás aún están escondiendo.</p></div>`,
+seek:()=>`<div class=hud><div class="pill glass">⏱ <span id=tm>5:00</span></div><div class="pill glass">🎯 <span id=fc></span></div><div class="pill glass" id=hint></div></div><div class=bar style="padding:0"><button id=ob class=btn style=display:none onclick=openIt()>📦 ¡Abrir caja!</button></div>`,
+end:()=>{const L=Object.values(R.players).sort((a,b)=>(b.found||[]).length-(a.found||[]).length),w=R.players[R.winner]||L[0];return`<div class="center glass"><div style="font-size:50px">🏆</div><h1>${esc(w.name)}</h1><p class=sub>${R.winner?'¡Terminó primero!':'Se acabó el tiempo'}</p>${L.map(p=>`<div>${esc(p.name)}: <b>${(p.found||[]).length}</b> 🎁</div>`).join('')}<button class=btn onclick="sync({reset:1})">Jugar otra vez</button><button class="ghost" onclick=menu()>Menú</button></div>`},
+soc:()=>`<div class=hud>${back}<div class="pill glass">⚽ <span id=sc>0/0</span></div><div class="pill glass" id=sh>Tiro 1/5</div></div><div class=bar style="padding:0;text-align:center"><div class="pill glass sub" id=hn style="display:inline-block">Apunta al suelo y pégale a la pelota con el pie</div></div>`,
+socend:()=>`<div class="center glass"><div style="font-size:50px">${B.goals>=3?'🏆':'🥅'}</div><h1>${B.goals}/5</h1><p class=sub>${B.goals>=4?'¡Crack!':B.goals>=3?'¡Muy bien!':'Sigue practicando'}</p><button class=btn onclick=playSoc()>Otra tanda</button><button class=ghost onclick=menu()>Menú</button></div>`};
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;$('tw').appendChild(d);setTimeout(()=>d.remove(),1500)}
+// ---------- Acciones ----------
+async function enter(){if(S.started)return;S.name=($('nm').value||'Jugador').trim().slice(0,14);S.code=$('cd').value.trim().toLowerCase();
+ try{$('v').srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});await $('v').play()}catch(e){alert('Necesito acceso a la cámara (la web debe abrirse con https).');return}
+ S.started=true;go2('menu');requestAnimationFrame(loop)}
+function menu(){clearInterval(S.poll);S.poll=0;if(S.game==='hide')sync({leave:1});S.game='';B.ph='';go2('menu')}
+function playHide(){S.game='hide';go2('lobby');if(!S.poll)S.poll=setInterval(sync,1000);sync()}
 const start=()=>sync({start:1});
-function zero(){S.pos=[0,0,1.4];S.trail=[[0,0]];S.zero=true;render()}
-function corner(){S.corners.push([S.pos[0],S.pos[1]]);toast('🧱')}
-function pick(i){S.sel=i;render()}
-function place(){const B=bas();if(S.sel===null)return;S.items.push([S.inv[S.sel],...S.pos.map((v,i)=>v+B.f[i]*S.dist)]);S.sel=null;navigator.vibrate&&navigator.vibrate(40);toast('📍');render()}
-function undo(){S.items.pop();render()}
-function ready(){S.stage='wait';pend.hidden=S.items;pend.stage='ready';sync();render()}
-function openNear(){const B=bas();let b=null,ba=14;targets().forEach(o=>{if(S.opened.includes(o.k))return;const v=[o.p[0]-S.pos[0],o.p[1]-S.pos[1],o.p[2]-S.pos[2]],a=Math.acos(Math.max(-1,Math.min(1,dot(B.f,v)/(Math.hypot(...v)||1))))/D;if(a<ba){ba=a;b=o}});
- if(!b)return;S.opened.push(b.k);pend.found=S.opened.slice();navigator.vibrate&&navigator.vibrate([80,40,80]);toast('¡'+b.e+'!');sync()}
-function toast(t){const d=document.createElement('div');d.id='toast';d.textContent=t;$('toastw').appendChild(d);setTimeout(()=>d.remove(),1200)}
-const tog=()=>`<button class="g b" onclick="S.wk=!S.wk;render()">🚶 Caminar: ${S.wk?'SÍ':'NO'}</button>`;
-const foot=()=>!S.wk?'':'<button class="g b foot" onpointerdown="walk=true" onpointerup="walk=false" onpointerleave="walk=false">🦶</button>';
-function render(){const s=S.stage;let h='';
- if(s==='home')h=`<div class="card b"><h1>🫥 Escondite AR</h1><p class=s>Esconde objetos por tu casa y encuéntralos con la cámara.</p><input id=nm placeholder="Tu nombre"><input id=cd placeholder="Código de sala (opcional)"><button onclick=go()>Entrar</button></div>`;
- if(s==='lobby')h=`<div class="card b"><h2>Sala</h2><div id=pl></div><p class=s>Los móviles de tu misma WiFi aparecen aquí solos. Si juegas solo, esconderás y luego buscarás tú.</p><button onclick=start()>🚀 Empezar</button></div>`;
- if(s==='hide'){const n=S.items.length;h=`<div class=top>🙈 Quédate en el centro de la zona. Apunta la mira al sitio (armario, bajo el sofá…), elige un objeto y escóndelo. ${n}/5</div>${foot()}<div class="bot b"><div class=inv>${S.inv.map((e,i)=>`<button class="${S.sel===i?'on':''}" ${i<n?'disabled':''} onclick=pick(${i})>${e}</button>`).join('')}</div>
-  <div class=s>Distancia: <b id=dl>${S.dist.toFixed(1)}</b> m</div><input type=range min=.3 max=4 step=.1 value=${S.dist} oninput="S.dist=+this.value;$('dl').textContent=S.dist.toFixed(1)">
-  <div class=row><button class=g onclick=undo()>↩</button>${tog()}<button ${S.sel===null?'disabled':''} onclick=place()>📍 Esconder aquí</button></div>${n>=5?'<button onclick=ready()>✅ Listo, a buscar</button>':''}</div>`}
- if(s==='wait')h=`<div class="card b"><h2>⏳ Esperando…</h2><p>Los demás todavía están escondiendo.</p></div>`;
- if(s==='seek')h=`<div class=top>⏱ <b id=tm></b> · 🎯 <b id=fc></b><div id=hint></div></div>${foot()}<div class="bot b">${tog()}<button id=ob style="display:none" onclick=openNear()>📦 Abrir caja</button></div>`;
- if(s==='end'){const L=Object.values(R.players).sort((a,b)=>(b.found||[]).length-(a.found||[]).length),w=R.players[R.winner]||L[0];
-  h=`<div class="card b"><h1>🏆 ${esc(w.name)}</h1><p>${R.winner?'¡Terminó primero!':'Se acabó el tiempo'}</p>${L.map(p=>`<div>${esc(p.name)}: ${(p.found||[]).length} 🎁</div>`).join('')}<button onclick="sync({reset:1})">Jugar otra vez</button></div>`}
- $('ui').innerHTML=h}
-// ---- Dibujo AR
-function emo(e,x,y,d,a,ring){const s=Math.max(26,Math.min(150,110/d));X.globalAlpha=a;X.font=s+'px serif';X.textAlign='center';X.textBaseline='middle';
- if(ring){X.strokeStyle='#fff';X.setLineDash([6,6]);X.lineWidth=2;X.beginPath();X.arc(x,y,s*.7,0,TAU);X.stroke();X.setLineDash([])}X.fillText(e,x,y);X.globalAlpha=1}
-function mini(){const r=42,cx=W-r-12,cy=r+max0(),k=8;X.save();X.fillStyle='#000a';X.beginPath();X.arc(cx,cy,r,0,TAU);X.fill();X.clip();
- X.strokeStyle='#4ff';X.lineWidth=2;X.beginPath();S.trail.forEach(([x,y],i)=>{const px=cx+(x-S.pos[0])*k,py=cy-(y-S.pos[1])*k;i?X.lineTo(px,py):X.moveTo(px,py)});X.stroke();
- X.fillStyle='#fa0';S.corners.forEach(([x,y])=>X.fillRect(cx+(x-S.pos[0])*k-3,cy-(y-S.pos[1])*k-3,6,6));
- const B=bas(),n=Math.hypot(B.f[0],B.f[1])||1;X.fillStyle='#fff';X.beginPath();X.arc(cx,cy,4,0,TAU);X.fill();X.strokeStyle='#fff';X.beginPath();X.moveTo(cx,cy);X.lineTo(cx+B.f[0]/n*16,cy-B.f[1]/n*16);X.stroke();X.restore()}
-const max0=()=>Math.max(12,0)+4;
-function loop(t){requestAnimationFrame(loop);X.clearRect(0,0,W,H);const B=bas(),st=S.stage;if(walk)mv(1.1*(t-lastT)/1000);lastT=t;
- if(S.wk&&['hide','seek'].includes(st))mini();
- if(st==='hide'){S.items.forEach(h=>{const q=proj([h[1],h[2],h[3]],B);if(q)emo(h[0],q.x,q.y,q.d,.55,true)});
-  if(S.sel!==null){const q=proj(S.pos.map((v,i)=>v+B.f[i]*S.dist),B);if(q)emo(S.inv[S.sel],q.x,q.y,q.d,.95,true)}
-  X.strokeStyle='#fff9';X.lineWidth=2;X.beginPath();X.arc(W/2,H/2,8,0,TAU);X.stroke()}
-  if(st==='seek'&&R){let best=1e9;
-  targets().forEach(o=>{if(S.opened.includes(o.k))return;const v=[o.p[0]-S.pos[0],o.p[1]-S.pos[1],o.p[2]-S.pos[2]],n=Math.hypot(...v)||1,ang=Math.acos(Math.max(-1,Math.min(1,dot(B.f,v)/n)))/D;best=Math.min(best,ang);
-   const q=proj(o.p,B);if(!q||ang>35)return;
-   if(ang>14)emo('✨',q.x,q.y,2,.25+.6*(35-ang)/21+.1*Math.sin(t/200));else{emo('📦',q.x,q.y+4*Math.sin(t/150),1.2,1);X.font='bold 14px sans-serif';X.fillStyle='#fff';X.fillText('¡Aquí!',q.x,q.y+60)}});
-  const left=TIME-(Date.now()+S.off-R.t0)/1000;if(left<=0)return endGame();
-  const T=targets();$('tm').textContent=Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0');$('fc').textContent=S.opened.length+'/'+T.length;
-  $('hint').textContent=best>100?'🥶 Frío: mira hacia otro lado':best>60?'😐 Templado':best>30?'🔥 ¡Caliente!':best<1e8?'🌋 ¡Casi!':'';
-  $('ob').style.display=best<=14?'block':'none';if(best<35&&t-lastVib>600){lastVib=t;navigator.vibrate&&navigator.vibrate(30)}}
- X.globalAlpha=1}
-render();
+function pick(i){S.sel=i;go2('hide')}
+function place(){if(!S.cur)return;S.items.push({e:EM[S.sel],t:b64(S.cur)});navigator.vibrate&&navigator.vibrate(40);toast(EM[S.sel]+' ¡Escondido!');S.sel=EM.findIndex(e=>!S.items.some(i=>i.e===e));go2('hide')}
+function ready(){pend.hidden=S.items;pend.stage='ready';sync();go2('wait')}
+function openIt(){const o=M.o;if(!o||S.opened.includes(o.k))return;S.opened.push(o.k);pend.found=S.opened.slice();navigator.vibrate&&navigator.vibrate([80,40,80]);toast('¡'+o.e+' encontrado!');M.n=0;sync()}
+// ---------- Penaltis ----------
+const sS=z=>1-.55*z,scX=(x,z)=>W/2+x*.67*W*sS(z),gY=z=>H*.76+(H*.30-H*.76)*(1-sS(z))/.55,scY=(h,z)=>gY(z)-h*.62*H*sS(z),keeper=t=>.78*Math.sin(t/1000*(1.7+.25*B.shot));
+function playSoc(){S.game='soc';B={ph:'ready',shot:0,goals:0,x:0,z:0,h:0,t:0,pc:null};prev=null;go2('soc');setTimeout(()=>$('hn')&&($('hn').style.display='none'),5000)}
+function updSoc(){if($('sc'))$('sc').textContent=B.goals+'/'+Math.min(B.shot+(B.ph==='res'?1:0),5);if($('sh'))$('sh').textContent='Tiro '+Math.min(B.shot+1,5)+'/5'}
+function kick(side,fwd){if(B.ph!=='ready')return;fwd=Math.max(.3,Math.min(3,fwd));side=Math.max(-3,Math.min(3,side));
+ B.vz=.9+.45*fwd;B.vx=side*.4*B.vz;B.vh=.15+.18*fwd;B.x=0;B.z=0;B.h=0;B.t=0;B.ph='fly';B.pc=null;navigator.vibrate&&navigator.vibrate(40)}
+function resolve(){B.z=1;const xk=keeper(performance.now());let r;
+ if(Math.abs(B.x)>1||B.h>.5)r='😬 ¡Fuera!';else if(Math.abs(B.x-xk)<.3&&B.h<.46)r='🧤 ¡Parada!';else{r='🥅 ¡GOOOL!';B.goals++}
+ B.ph='res';toast(r);updSoc();setTimeout(()=>{B.shot++;updSoc();if(B.shot>=5)go2('socend');else{B.ph='ready';B.pc=null}},1600)}
+function socV(f){const p=prev;prev=f;if(!p||p.w!==f.w||p.h!==f.h||B.ph!=='ready')return;
+ const m=vm(),[fx,fy]=s2f(B.sx,B.sy),bx=fx*f.w,by=fy*f.h,Rr=B.r/(m.vw*m.sc)*f.w;let tot=0,n=0,sx=0,sy=0,an=0,ax=0,ay=0;
+ for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){const i=y*f.w+x;if(Math.abs(f.g[i]-p.g[i])>24){tot++;const d=Math.hypot(x-bx,y-by);if(d<Rr*1.4){n++;sx+=x;sy+=y}if(d<Rr*4){an++;ax+=x;ay+=y}}}
+ if(tot>f.w*f.h*.3){B.pc=null;return}
+ if(n>Math.PI*Rr*Rr*.18){const c=[sx/n,sy/n],pc=B.pc||c;kick(((bx-c[0])*.5+(c[0]-pc[0])*.8)/Rr,((c[1]-by)*.5-(c[1]-pc[1])*.8)/Rr)}
+ else B.pc=an?[ax/an,ay/an]:null}
+let sw=null;addEventListener('pointerdown',e=>{if(S.scr==='soc'&&B.ph==='ready'&&Math.hypot(e.clientX-B.sx,e.clientY-B.sy)<B.r*2.5)sw=[e.clientX,e.clientY]});
+addEventListener('pointerup',e=>{if(sw){kick((e.clientX-sw[0])/B.r*.35,-(e.clientY-sw[1])/B.r*.35);sw=null}});
+function drawSoc(t,dt){B.r=W*.075;B.sx=W/2;B.sy=gY(0)-B.r;
+ if(B.ph==='fly'){B.t+=dt;B.z+=B.vz*dt;B.x+=B.vx*dt;B.h=Math.max(0,B.vh*B.t-.6*B.t*B.t);if(B.z>=1)resolve()}
+ const y0=gY(0),g=X.createLinearGradient(0,gY(1),0,y0);g.addColorStop(0,'#22c55e55');g.addColorStop(1,'#22c55e11');X.fillStyle=g;X.beginPath();X.moveTo(scX(-1.8,0),y0+14);X.lineTo(scX(1.8,0),y0+14);X.lineTo(scX(1.45,1),gY(1));X.lineTo(scX(-1.45,1),gY(1));X.fill();
+ const xl=scX(-1,1),xr=scX(1,1),yb=gY(1),yt=scY(.5,1);X.strokeStyle='#fff3';X.lineWidth=1;
+ for(let i=0;i<=10;i++){const x=xl+(xr-xl)*i/10;X.beginPath();X.moveTo(x,yt);X.lineTo(x,yb);X.stroke()}for(let i=0;i<=5;i++){const y=yt+(yb-yt)*i/5;X.beginPath();X.moveTo(xl,y);X.lineTo(xr,y);X.stroke()}
+ X.strokeStyle='#fff';X.lineWidth=6;X.lineCap='round';X.shadowColor='#fff';X.shadowBlur=14;X.beginPath();X.moveTo(xl,yb);X.lineTo(xl,yt);X.lineTo(xr,yt);X.lineTo(xr,yb);X.stroke();X.shadowBlur=0;
+ const kx=scX(keeper(t),1),kh=(yb-yt)*.9,dv=B.ph==='fly'?Math.sign(B.vx)*.25:0;X.save();X.translate(kx,yb);X.rotate(dv*Math.sin(Math.min(B.t*6,3)));
+ X.fillStyle='#f97316';X.beginPath();X.roundRect(-kh*.2,-kh*.75,kh*.4,kh*.5,8);X.fill();X.fillStyle='#fcd9b6';X.beginPath();X.arc(0,-kh*.88,kh*.13,0,TAU);X.fill();
+ X.strokeStyle='#f97316';X.lineWidth=kh*.09;X.beginPath();X.moveTo(-kh*.2,-kh*.7);X.lineTo(-kh*.42,-kh*.9);X.moveTo(kh*.2,-kh*.7);X.lineTo(kh*.42,-kh*.9);X.stroke();X.fillStyle='#22d3ee';X.beginPath();X.arc(-kh*.42,-kh*.92,kh*.07,0,TAU);X.arc(kh*.42,-kh*.92,kh*.07,0,TAU);X.fill();
+ X.fillStyle='#1e293b';X.fillRect(-kh*.18,-kh*.25,kh*.15,kh*.25);X.fillRect(kh*.03,-kh*.25,kh*.15,kh*.25);X.restore();
+ const z=B.ph==='fly'||B.ph==='res'?B.z:0,s=sS(z),bx=scX(B.ph==='ready'?0:B.x,z),Rs=B.r*s,by=scY(B.ph==='ready'?0:B.h,z)-Rs;
+ X.fillStyle='#0006';X.beginPath();X.ellipse(bx,gY(z),Rs*.9,Rs*.3,0,0,TAU);X.fill();
+ X.font=Rs*2.1+'px serif';X.textAlign='center';X.textBaseline='middle';X.fillText('⚽',bx,by);
+ if(B.ph==='ready'){X.strokeStyle='#fff8';X.lineWidth=2;X.setLineDash([6,6]);X.beginPath();X.arc(B.sx,B.sy,B.r*1.5+3*Math.sin(t/250),0,TAU);X.stroke();X.setLineDash([])}}
+// ---------- Dibujo ----------
+function brackets(cx,cy,L,col){X.strokeStyle=col;X.lineWidth=4;X.lineCap='round';const a=L/2,k=L*.25;for(const[sx,sy]of[[-1,-1],[1,-1],[-1,1],[1,1]]){X.beginPath();X.moveTo(cx+sx*a,cy+sy*(a-k));X.lineTo(cx+sx*a,cy+sy*a);X.lineTo(cx+sx*(a-k),cy+sy*a);X.stroke()}}
+function loop(t){requestAnimationFrame(loop);const dt=Math.min(.05,(t-lastT)/1000);lastT=t;X.clearRect(0,0,W,H);X.globalAlpha=1;
+ if(t-lastVis>(S.scr==='soc'?70:130)){lastVis=t;if(S.scr==='hide'||S.scr==='seek'||S.scr==='soc')vision()}
+ const m=vm();
+ if(S.scr==='hide'){const L=.36*m.vw*m.sc,ok=S.sd>12;brackets(W/2,H/2,L,ok?'#34d399':'#fbbf24');
+  S.items.forEach(()=>{});X.font='34px serif';X.textAlign='center';X.textBaseline='middle';X.globalAlpha=.6+.4*Math.sin(t/300);X.fillText(S.sel>=0?EM[S.sel]:'',W/2,H/2);X.globalAlpha=1}
+ if(S.scr==='seek'&&R){const left=TIME-(Date.now()+S.off-R.t0)/1000;if(left<=0){go2('end');return}
+  if($('tm'))$('tm').textContent=Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0');const T=targets();if($('fc'))$('fc').textContent=S.opened.length+'/'+T.length;
+  if(M.p&&M.sc>.45){const[x,y]=f2s(M.p[0],M.p[1]),ready=M.n>=3,p=ready?1:.55;X.globalAlpha=p;
+   if(ready){X.fillStyle='#22d3ee33';X.beginPath();X.arc(x,y,50+8*Math.sin(t/150),0,TAU);X.fill()}
+   X.font=(ready?64:40)+'px serif';X.textAlign='center';X.textBaseline='middle';X.fillText(ready&&M.o?M.o.e:'✨',x,y+(ready?6*Math.sin(t/200):0));X.globalAlpha=1}
+  else brackets(W/2,H/2,.36*m.vw*m.sc,'#ffffff44')}
+ if(S.scr==='soc')drawSoc(t,dt)}
 </script></body></html>
